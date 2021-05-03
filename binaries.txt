@@ -1,0 +1,15 @@
+{
+    "chisel": {
+        "source_url_format": "https://github.com/jpillora/chisel/releases/download/v{release_version}",
+        "file_name_format": "chisel_{release_version}_linux_{arch_string}.gz",
+        "checksum_file_name_format": "chisel_{release_version}_checksums.txt",
+        "checksum_algorithm": "sha256",
+        "release_version": "1.7.6",
+        "compressed": true
+    },
+    "kerbrute": {
+        "source_url_format": "https://github.com/ropnop/kerbrute/releases/download/v{release_version}",
+        "file_name_format": "kerbrute_linux_{arch_string}",
+        "release_version": "1.0.3"
+    }
+}
