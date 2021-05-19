@@ -50,8 +50,9 @@ The ability to track repositories by remote URL may be added in the future.
 
 ## Shells
 
-The code governing shell installation is currently underdeveloped and not yet adaptable.
-It will be redone in a future release, but it functions for current purposes and I wanted to make this public as soon as possible.
+Shells can be configured similarly to repositories and binaries.
+No formal documentation currently exists, but it will be added soon.
+Please consult the source code for information - the variables are documented there.
 
 ## Security
 

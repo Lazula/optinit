@@ -12,6 +12,9 @@ import logging
 import errno
 import subprocess
 import json
+import socket
+
+from os.path import dirname, join, isdir, abspath
 
 import install_bin
 import install_shell
@@ -29,6 +32,10 @@ def parse_arguments():
     configs = parser.add_argument_group()
     configs.add_argument("-r", "--repository-config-file", type=str, default="repositories.txt", help="Specify repository file location.")
     configs.add_argument("-b", "--binary-config-file", type=str, default="binaries.txt", help="Specify binary configuration file location.")
+    configs.add_argument("-s", "--shell-config-file", type=str, default="shells.txt", help="Specify shell configuration file location.")
+    reverse_shell_configs = parser.add_argument_group()
+    reverse_shell_configs.add_argument("-H", "--lhost", type=str, default="127.0.0.1", help="Specify a local host for reverse shell payloads.")
+    reverse_shell_configs.add_argument("-P", "--lport", type=int, default=4444, help="Specify a local port for reverse shell payloads.")
     return parser.parse_args()
 
 
@@ -38,7 +45,7 @@ def prepare_install_dir(install_dir, userbin_only=False):
         logging.debug(f"Created {install_dir}.")
     except FileExistsError:
         logging.debug(f"{install_dir} already exists.")
-        if not os.path.isdir(install_dir):
+        if not isdir(install_dir):
             logging.error(f"{install_dir} is not a directory.")
             return errno.ENOTDIR
         if not os.access(install_dir, os.W_OK):
@@ -48,7 +55,7 @@ def prepare_install_dir(install_dir, userbin_only=False):
         logging.error(f"Could not create {install_dir}.")
         return errno.EPERM
 
-    userbin_dir = os.path.join(install_dir, "userbin")
+    userbin_dir = join(install_dir, "userbin")
     try:
         os.makedirs(userbin_dir)
         logging.debug(f"Created {userbin_dir}.")
@@ -58,7 +65,7 @@ def prepare_install_dir(install_dir, userbin_only=False):
     if userbin_only:
         return 0
 
-    bin_dir = os.path.join(install_dir, "bin")
+    bin_dir = join(install_dir, "bin")
     try:
         os.makedirs(bin_dir)
         logging.debug(f"Created {bin_dir}.")
@@ -80,7 +87,7 @@ def get_existing_repositories(init_source, install_dir):
     with os.scandir(install_dir) as entries:
         for entry in entries:
             if entry.is_dir():
-                os.chdir(os.path.join(install_dir, entry.name))
+                os.chdir(join(install_dir, entry.name))
                 proc = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True)
                 remote_url = proc.stdout.decode().rstrip()
                 # remote_url is empty if the directory is not a git repo
@@ -116,16 +123,19 @@ def install_repositories(init_source, install_dir, repository_file, update=False
             old_name = existing_repositories[repo_url]
             if repo_name != old_name:
                 logging.debug(f"Moving {old_name} to {repo_name}.")
-                shutil.move(os.path.join(install_dir, old_name), os.path.join(install_dir, repo_name))
+                shutil.move(join(install_dir, old_name), join(install_dir, repo_name))
 
             logging.debug(f"Updating {repo_name}.")
-            os.chdir(os.path.join(install_dir, repo_name))
+            os.chdir(join(install_dir, repo_name))
             try:
                 subprocess.run(["git", "pull", "--ff-only"], stdout=subprocess.DEVNULL)
             except subprocess.CalledProcessError as e:
                 logging.error(f"An error was encountered while updating {repo_name}.")
                 if not ignore_errors:
+                    os.chdir(install_dir)
                     return e.returncode
+            finally:
+                os.chdir(install_dir)
         except KeyError:
             # Repository needs to be installed
             logging.debug(f"Cloning {repo_name}")
@@ -135,51 +145,71 @@ def install_repositories(init_source, install_dir, repository_file, update=False
             except subprocess.CalledProcessError as e:
                 logging.error(f"An error was encountered while cloning {repo_name}.")
                 if not ignore_errors:
+                    os.chdir(install_dir)
                     return e.returncode
+            finally:
+                os.chdir(install_dir)
 
     os.chdir(init_source)
     return 0
 
 
 def install_scripts(init_source, userbin_dir, update=False, archive_old_files=True):
-    userbin_source = os.path.join(init_source, "userbin")
+    userbin_source = join(init_source, "userbin")
     if update:
         if archive_old_files:
             logging.debug(f"Archiving userbin files.")
-            shutil.copytree(userbin_source, os.path.join(userbin_dir, "userbin_archive"), dirs_exist_ok=True)
+            shutil.copytree(userbin_source, join(userbin_dir, "userbin_archive"), dirs_exist_ok=True)
         else:
             logging.debug(f"userbin files will not be archived.")
     shutil.copytree(userbin_source, userbin_dir, dirs_exist_ok=True)
 
 
-def install(init_source, install_dir, repository_file, binary_params, local_only=False, update=False, ignore_errors=False, archive_userbin=False):
+def install(init_source, install_dir, repository_file, binary_params, shell_params, lhost="127.0.0.1", lport=4444, local_only=False, update=False, ignore_errors=False, archive_userbin=False):
     status = prepare_install_dir(install_dir, userbin_only=local_only)
     # None of the nonzero error codes here are recoverable
     if status:
         return status
 
-    userbin_dir = os.path.join(install_dir, "userbin")
+    userbin_dir = join(install_dir, "userbin")
+    os.makedirs(userbin_dir, exist_ok=True)
     logging.info(f"Copying scripts to {userbin_dir}")
     status = install_scripts(init_source, userbin_dir=userbin_dir, update=update, archive_old_files=archive_userbin)
     if status:
         return status
 
+    shell_dir = join(install_dir, "shell")
+    os.makedirs(shell_dir, exist_ok=True)
+    logging.info(f"Installing shells to {shell_dir}")
+    status = install_shell.install_shells(init_source, shell_dir, shell_params, local_only, ignore_errors)
+    if status:
+        return status
+
+    # Initialize reverse shells with IP and port
+    subprocess.run(["/bin/bash", join(userbin_dir, "set_host_port.sh"), lhost, str(lport)])
+
     if local_only:
         logging.debug(f"local_only enabled. Installation complete.")
         # Create a file to mark the installation as completed
-        with open(os.path.join(install_dir, ".optinit"), "w") as _:
+        with open(join(install_dir, ".optinit"), "w") as _:
             pass
+        return 0
 
-    logging.debug(f"local_only disabled. Continuing installation.")
-    binary_dir = os.path.join(install_dir, "bin")
-    download_log_file = os.path.join(binary_dir, ".download_log")
+    logging.debug(f"local_only disabled. Installing binaries.")
+    binary_dir = join(install_dir, "bin")
+    os.makedirs(binary_dir, exist_ok=True)
+    download_log_file = join(binary_dir, ".download_log")
     try:
         download_log = json.load(open(download_log_file, "r"))
     except FileNotFoundError:
         download_log = {}
     logging.info(f"Downloading static binaries to {binary_dir}")
     install_bin.install_binaries(binary_dir=binary_dir, binary_params=binary_params, download_log=download_log, ignore_errors=ignore_errors)
-    json.dump(download_log, open(download_log_file, "w"))
+    try:
+        json.dump(download_log, open(download_log_file, "w"))
+    except FileNotFoundError:
+        logging.error(f"Could not write binary download log file.")
+
     if status:
         return status
 
@@ -188,35 +218,48 @@ def install(init_source, install_dir, repository_file, binary_params, local_only
         logging.error(f"Returning child error code.")
         return status
 
-    install_shell.install_shell(install_dir, ignore_errors=ignore_errors)
-
     # Copy READMEs
     logging.debug("Copying READMEs")
     for directory in ["bin", "userbin", "shell"]:
-        shutil.copy2(os.path.join(init_source, "directory_readmes", f"{directory}.md"), os.path.join(install_dir, directory, "README.md"))
+        shutil.copy2(join(init_source, "directory_readmes", f"{directory}.md"), join(install_dir, directory, "README.md"))
 
     # Create a file to mark the installation as completed
-    with open(os.path.join(install_dir, ".optinit"), "w") as _:
+    with open(join(install_dir, ".optinit"), "w") as _:
         pass
 
     logging.info("Installation complete.")
 
 
 def main(args):
+    # Manage verbosity
     if args.quiet:
         logging.disable()
     elif args.verbose:
-        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(message)s")
+        logging.basicConfig(level=logging.DEBUG, format="[%(levelname)s]: %(message)s")
     else:
-        logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
+        logging.basicConfig(level=logging.INFO, format="[%(levelname)s]: %(message)s")
+
+    # Check lhost/lport
+    try:
+        socket.inet_pton(socket.AF_INET, args.lhost)
+    except socket.error:
+        logging.error(f"{args.lhost} is not a valid IPv4 address.")
+        return 1
+
+    if args.lport < 1 or args.lport > 65535:
+        logging.error(f"{args.lport} is not a valid port number.")
+        return 1
 
     # Forcibly disable urllib3 debug output
     logging.getLogger("urllib3").setLevel(logging.INFO)
 
-    init_source = os.getcwd()
-    install_dir = os.path.join(init_source, args.install_dir)
-    repository_file = os.path.join(init_source, args.repository_config_file)
-    binary_config_file = os.path.join(init_source, args.binary_config_file)
+    init_source = abspath(dirname(sys.argv[0]))
+    install_dir = abspath(join(init_source, args.install_dir))
+    repository_file = join(init_source, args.repository_config_file)
+    binary_config_file = join(init_source, args.binary_config_file)
+    shell_config_file = join(init_source, args.shell_config_file)
+
+    # Read binary config file
     try:
         binary_params = json.load(open(binary_config_file, "r"))
     except FileNotFoundError:
@@ -229,16 +272,29 @@ def main(args):
         if not args.ignore_errors:
             return 1
 
+    # Read shell config file
+    try:
+        shell_params = json.load(open(shell_config_file, "r"))
+    except FileNotFoundError:
+        logging.error(f"{shell_config_file} does not exist.")
+        if not args.ignore_errors:
+            return 1
+        shell_params = {}
+    except json.decoder.JSONDecodeError as e:
+        logging.error(f"Error in shell config file format: {e}")
+        if not args.ignore_errors:
+            return 1
+
     if not os.access(repository_file, os.F_OK) and not args.ignore_errors:
         logging.error(f"{repository_file} does not exist.")
         return 1
 
     try:
-        if os.access(os.path.join(install_dir, ".optinit"), os.F_OK) and not args.update:
+        if os.access(join(install_dir, ".optinit"), os.F_OK) and not args.update:
             logging.error(f"An existing installation exists. Run with -u if you would like to update it (add -a to archive the current userbin contents). No further action will be taken at this time.")
             return 1
         else:
-            status = install(init_source, install_dir, repository_file, binary_params, local_only=args.local_only, update=args.update, ignore_errors=args.ignore_errors, archive_userbin=args.archive_userbin)
+            status = install(init_source, install_dir, repository_file, binary_params, shell_params, lhost=args.lhost, lport=args.lport, local_only=args.local_only, update=args.update, ignore_errors=args.ignore_errors, archive_userbin=args.archive_userbin)
     except KeyboardInterrupt:
         os.chdir(init_source)
         logging.info(f"Caught keyboard interrupt. Exiting.")

