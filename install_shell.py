@@ -52,8 +52,10 @@ def install_shell(init_source, shell_dir, name, location, shell_type, source_pat
     # Check for invalid location or source_path value
     # Apply default source_path, if applicable
     if location == "local":
-        if not source_path:
-            source_path = join(init_source, "shell", name)
+        if source_path:
+            source_path = abspath(join(init_source, source_path))
+        else:
+            source_path = abspath(join(init_source, "shell", name))
     elif location == "remote":
         if not source_path:
             logging.error(f"No source path for remote shell \"{name}\"")
