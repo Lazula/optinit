@@ -1,8 +1,7 @@
 #!/usr/bin/python3
 #
-# optinit.py Copyright (C) Lazula 2021
-# Distributed under GNU GPLv3 or later
-# Further license information at end of file
+# SPDX-FileCopyrightText: (C) 2021 Lazula <26179473+Lazula@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import argparse
 import os
@@ -311,20 +310,3 @@ def main(args):
 
 if __name__ == "__main__":
     sys.exit(main(parse_arguments()))
-
-
-""" This file is part of optinit.
-
-    optinit is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    optinit is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with optinit.  If not, see <https://www.gnu.org/licenses/>.
-"""

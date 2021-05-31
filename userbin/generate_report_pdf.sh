@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-FileCopyrightText: (C) 2021 Lazula <26179473+Lazula@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <report (md)> <output file (pdf)> [-q]"

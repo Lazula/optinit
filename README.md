@@ -12,7 +12,8 @@ This repository is made public for many reasons, including my own convenience, u
 It is intended for use primarily on Kali Linux (ideally via `live-build` if I ever get `apt` to work properly...) or single-user pentesting distributions more generally, but it should function on any distribution of GNU/Linux, as long as both Bash and Python 3 are present.
 There are no plans at this time to support other operating systems.
 Please note that any dependencies or packages needed are not checked for or included at this time.
-For further details about installed software, please refer to the files contained in [directory_readmes](directory_readmes) for each folder, which are placed in the respective directories after installation.
+For further details about installed software, please refer to the files
+contained in [directory\_readmes](directory_readmes) for each folder, which are placed in the respective directories after installation.
 
 At this time, no actions are taken within each repository.
 This may change in the future, though it may be determined to be outside this project's scope.
@@ -85,6 +86,6 @@ Once installed, the code contained here is no longer necessary unless you want t
 ## Licensing
 
 This program is distributed under the GNU GPL, version 3 or later; see [COPYING](COPYING).
-If a script does not contain explicit copyright information, consider it to be a part of this project for copyright purposes.
+If a file does not contain explicit copyright information, consider it to be a part of this project for copyright purposes.
 While the licensing of related projects varies, the terms do not apply this project, as it merely provides a method to acquire each piece of software from its original source, and does not redistribute any of them itself.
 If you would like to redistribute any related projects yourself, please ensure you follow any relevant licensing constraints.

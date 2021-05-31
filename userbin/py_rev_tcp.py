@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+#
+# SPDX-FileCopyrightText: (C) 2021 Lazula <26179473+Lazula@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import argparse
 import os
